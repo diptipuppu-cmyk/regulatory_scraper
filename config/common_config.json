@@ -1,0 +1,31 @@
+{
+    "environment": "deloitte_lab",
+
+    "catalog": "ai_platform_dev",
+    "schema": "regulatory_scraping",
+    "raw_volume_path": "/Volumes/ai_platform_dev/regulatory_scraping/raw",
+
+    "defaults": {
+        "scan_mode": "INCREMENTAL",
+        "last_n_days": 7,
+        "overlap_days": 3,
+        "max_window_days": 31,
+        "fail_on_partial": true,
+        "stale_run_hours": 6
+    },
+
+    "regulators": {
+        "MAS": {
+            "enabled": true,
+            "config_path": "config/regulators/mas_config.json",
+            "scraper_module": "scrapers.mas_scraper",
+            "scraper_class": "MasScraper"
+        },
+        "PDPC": {
+            "enabled": false,
+            "config_path": "config/regulators/pdpc_config.json",
+            "scraper_module": "scrapers.pdpc_scraper",
+            "scraper_class": "PdpcScraper"
+        }
+    }
+}

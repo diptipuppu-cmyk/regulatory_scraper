@@ -6,11 +6,11 @@
 # MAGIC
 # MAGIC 1. Reads job parameters and `config/common_config.json` (tables, volume path, scan defaults, regulator registry).
 # MAGIC 2. Loads the regulator's own config and scraper class from the registry.
-# MAGIC 3. Pre flight: configs valid, tables match the code, volume writable, Chromium launches, no other run for this regulator.
+# MAGIC 3. Pre flight: configs valid, tables match the code, volume writable, Microsoft Edge launches, no other run for this regulator.
 # MAGIC 4. Runs the scraper and records RUN, CATEGORY, ITEM and FILE rows in `scraping_audit_log`.
 # MAGIC 5. Fails the task when the run is FAILED, or PARTIAL_SUCCESS when `fail_on_partial` is true in the common config.
 # MAGIC
-# MAGIC Cluster: single node job cluster, DBR 14.3 LTS, init script `scripts/playwright_init.sh`.
+# MAGIC Cluster: single node job cluster, DBR 14.3 LTS, init script `scripts/playwright_init.sh` (installs Microsoft Edge Stable).
 
 # COMMAND ----------
 
@@ -143,7 +143,7 @@ try:
     os.remove(_probe)
 
     BROWSER_PATH, BROWSER_VERSION = await check_browser()
-    logger.info('Chromium %s found in %s', BROWSER_VERSION, BROWSER_PATH)
+    logger.info('Microsoft Edge %s found at %s', BROWSER_VERSION, BROWSER_PATH)
 
     RunGuard(spark, AUDIT_TABLE, REGULATOR_ID, 'SCRAPE', STALE_RUN_HOURS).check_can_start(RUN_ID)
 except Exception as error:

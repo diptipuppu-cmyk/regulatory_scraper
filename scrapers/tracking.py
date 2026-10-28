@@ -287,18 +287,14 @@ CATALOG_COLUMNS = [
     ('first_seen_run_id', 'string'), ('first_seen_sgt', 'timestamp'),
     ('last_seen_run_id', 'string'), ('last_seen_sgt', 'timestamp'), ('last_changed_sgt', 'timestamp'),
     ('malware_scan_verdict', 'string'), ('scan_timestamp_sgt', 'timestamp'),
-    ('copy_status', 'string'), ('copied_version', 'int'), ('copied_hash_sha256', 'string'),
-    ('internal_file_path', 'string'), ('copied_at_sgt', 'timestamp'),
-    ('copy_retry_count', 'int'), ('copy_error_details', 'string'),
 ]
 
-# Columns a CHANGED version overwrites. first_seen_* and copied_* are preserved.
+# Columns a CHANGED version overwrites. first_seen_* is preserved. The verdict is reset, so the new version is checked again.
 CATALOG_UPDATE_ON_CHANGE = [
     'category_id', 'content_format', 'item_title', 'item_date', 'item_date_label', 'item_reference',
     'source_url', 'link_text', 'file_name', 'current_version', 'content_hash_sha256',
     'file_size_bytes', 'raw_file_path', 'scrape_status', 'last_seen_run_id', 'last_seen_sgt',
-    'last_changed_sgt', 'malware_scan_verdict', 'scan_timestamp_sgt', 'copy_status',
-    'copy_retry_count', 'copy_error_details',
+    'last_changed_sgt', 'malware_scan_verdict', 'scan_timestamp_sgt',
 ]
 
 AUDIT_COLUMNS = [

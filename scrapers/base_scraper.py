@@ -33,7 +33,6 @@ from scrapers.tracking import (
     remove_quietly, safe_file_name, sha256_bytes, versioned_path, write_file_verified, get_logger,
 )
 
-KNOWN_BROWSER_PATHS = ('/databricks/playwright-browsers', '/root/.cache/ms-playwright')
 
 USER_AGENT = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
               '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
@@ -45,30 +44,24 @@ RETRYABLE_HTTP = {429, 500, 502, 503, 504}
 # Browser setup
 # =====================================================================
 
+EDGE_BINARY = '/usr/bin/microsoft-edge-stable'
+
+
 def configure_browser_path():
-    '''Point Playwright at the folder where the init script installed Chromium.
-    Playwright reads PLAYWRIGHT_BROWSERS_PATH when it starts. If the cluster environment
-    variable is missing, use the first known folder that contains a Chromium build.
-    Returns the folder in use.'''
-    import glob
+    '''Check that the init script installed Microsoft Edge Stable. Returns its path.'''
     import os
-    current = os.environ.get('PLAYWRIGHT_BROWSERS_PATH')
-    candidates = ([current] if current else []) + [p for p in KNOWN_BROWSER_PATHS if p != current]
-    for folder in candidates:
-        if glob.glob(os.path.join(folder, 'chromium*')):
-            os.environ['PLAYWRIGHT_BROWSERS_PATH'] = folder
-            return folder
-    raise RuntimeError(
-        'No Chromium build found in ' + ', '.join(candidates) + '. The init script '
-        'scripts/playwright_init.sh did not run or failed: check that it is attached to the cluster, '
-        'restart the cluster, and read the init script logs.')
+    if not os.path.exists(EDGE_BINARY):
+        raise RuntimeError(f'Microsoft Edge not found at {EDGE_BINARY}. The init script '
+                           'scripts/playwright_init.sh did not run or failed: check that it is attached '
+                           'to the cluster, restart the cluster, and read the init script logs.')
+    return EDGE_BINARY
 
 
 async def check_browser():
-    '''Launch and close Chromium once. Used as a pre flight check.'''
+    '''Launch and close Microsoft Edge once. Used as a pre flight check.'''
     folder = configure_browser_path()
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=True)
+        browser = await playwright.chromium.launch(headless=True, channel='msedge')
         version = browser.version
         await browser.close()
     return folder, version
@@ -456,7 +449,6 @@ class BaseScraper:
                 content_hash_sha256=content_hash, file_size_bytes=len(data), raw_file_path=path,
                 scrape_status=decision.status, first_seen_run_id=self.run_id, first_seen_sgt=ts,
                 last_seen_run_id=self.run_id, last_seen_sgt=ts, last_changed_sgt=ts,
-                copy_status='PENDING', copy_retry_count=0,
             )
             try:
                 self.catalog.upsert_version(record)
@@ -504,7 +496,7 @@ class BaseScraper:
         browser = None
         try:
             async with async_playwright() as playwright:
-                browser = await playwright.chromium.launch(headless=True)
+                browser = await playwright.chromium.launch(headless=True, channel='msedge')
                 context = await browser.new_context(user_agent=USER_AGENT, accept_downloads=False)
                 page = await context.new_page()
                 self.logger.info('Opening landing page %s', self.config['landing_url'])

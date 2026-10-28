@@ -53,14 +53,17 @@ JOIN latest l ON a.run_id = l.run_id
 WHERE a.record_type = 'CATEGORY';
 
 
-/* 3. Documents not yet copied, with age */
-CREATE OR REPLACE VIEW ai_platform_dev.regulatory_scraping.v_copy_backlog AS
-SELECT regulator_id, category_id, document_id, file_name, current_version, copy_status,
-       copy_retry_count, copy_error_details, last_changed_sgt,
+/* 3. Documents waiting for a scan verdict, or not clean, with age.
+      The copy backlog is tracked in the internal zone (rcm_promotion_log). */
+DROP VIEW IF EXISTS ai_platform_dev.regulatory_scraping.v_copy_backlog;
+
+CREATE OR REPLACE VIEW ai_platform_dev.regulatory_scraping.v_scan_backlog AS
+SELECT regulator_id, category_id, document_id, file_name, current_version,
+       coalesce(malware_scan_verdict, 'WAITING') AS scan_state, scan_timestamp_sgt, last_changed_sgt,
        round((unix_timestamp(current_timestamp())
               - unix_timestamp(last_changed_sgt)) / 3600.0, 1) AS age_hours
 FROM ai_platform_dev.regulatory_scraping.pdf_catalog
-WHERE copy_status <> 'COPIED';
+WHERE malware_scan_verdict IS NULL OR malware_scan_verdict <> 'No threats found';
 
 
 /* 4. Failures in the last 14 days, all stages */
@@ -86,11 +89,18 @@ FROM ai_platform_dev.regulatory_scraping.v_run_history
 WHERE stage = 'SCRAPE' AND final_status IN ('SUCCESS', 'PARTIAL_SUCCESS');
 */
 
-/* A2. Copy backlog older than 48 hours */
+/* A2. Scan verdict missing for more than 24 hours */
 /*
 SELECT count(*) AS value
-FROM ai_platform_dev.regulatory_scraping.v_copy_backlog
-WHERE age_hours > 48;
+FROM ai_platform_dev.regulatory_scraping.v_scan_backlog
+WHERE scan_state = 'WAITING' AND age_hours > 24;
+*/
+
+/* A2b. Any file with a verdict other than clean (security alert) */
+/*
+SELECT count(*) AS value
+FROM ai_platform_dev.regulatory_scraping.v_scan_backlog
+WHERE scan_state <> 'WAITING';
 */
 
 /* A3. Latest scrape found zero items in every category (possible silent source change) */

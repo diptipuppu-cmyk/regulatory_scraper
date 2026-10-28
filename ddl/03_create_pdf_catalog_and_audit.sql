@@ -16,8 +16,10 @@
       One row per unique document (regulator plus normalised URL).
       PDF documents and HTML page snapshots (speeches, media releases,
       enforcement actions) both live here, told apart by content_format.
-      Holds the CURRENT version and the copy state.
-      The copy job reads only this table to decide what to pick up.
+      Holds the CURRENT version and its malware scan verdict.
+      Written only by the external workspace (scrape job and scan verdict job).
+      The internal copy job reads it (read only) and keeps its own copy state
+      in rcm_promotion_log in the internal catalog.
    ===================================================================== */
 CREATE TABLE IF NOT EXISTS ai_platform_dev.regulatory_scraping.pdf_catalog (
     document_id            STRING    NOT NULL COMMENT 'sha256 of regulator_id and normalised document_url',
@@ -46,21 +48,13 @@ CREATE TABLE IF NOT EXISTS ai_platform_dev.regulatory_scraping.pdf_catalog (
     last_seen_sgt          TIMESTAMP,
     last_changed_sgt       TIMESTAMP,
 
-    malware_scan_verdict   STRING             COMMENT 'Defender for Storage verdict, copy only when clean',
-    scan_timestamp_sgt     TIMESTAMP,
-
-    copy_status            STRING    NOT NULL COMMENT 'PENDING, COPIED, FAILED, BLOCKED',
-    copied_version         INT                COMMENT 'Version last copied to internal storage',
-    copied_hash_sha256     STRING             COMMENT 'Hash verified after copy',
-    internal_file_path     STRING,
-    copied_at_sgt          TIMESTAMP,
-    copy_retry_count       INT       NOT NULL,
-    copy_error_details     STRING,
+    malware_scan_verdict   STRING             COMMENT 'Defender for Storage blob index tag value. Empty until scanned. The copy job copies only No threats found',
+    scan_timestamp_sgt     TIMESTAMP          COMMENT 'When the scan verdict job read the verdict',
 
     CONSTRAINT pk_pdf_catalog PRIMARY KEY (document_id) NOT ENFORCED
 )
 USING DELTA
-COMMENT 'Current state of every scraped regulatory document. Source of truth for the copy job.'
+COMMENT 'Current state and scan verdict of every scraped regulatory document. Read only for the internal zone.'
 TBLPROPERTIES (
     'delta.autoOptimize.optimizeWrite' = 'true',
     'delta.autoOptimize.autoCompact'   = 'true',
@@ -76,14 +70,14 @@ TBLPROPERTIES (
         ITEM      one row per regulatory item found in the scan period
         FILE      one row per document per run per stage
 
-      stage  : SCRAPE (external workspace) or COPY (internal workspace)
+      stage  : SCRAPE (scrape job) or SCAN (scan verdict job), both in the external workspace
 
       status values
         RUN               RUNNING, SUCCESS, PARTIAL_SUCCESS, FAILED
         CATEGORY          SUCCESS, FAILED
         ITEM              SUCCESS, PARTIAL_SUCCESS, FAILED
         FILE and SCRAPE   NEW, CHANGED, SKIPPED, FAILED
-        FILE and COPY     COPIED, FAILED, BLOCKED
+        FILE and SCAN     SCANNED, WAITING, FAILED (verdict in malware_scan_verdict)
 
       skip_reason values (only when status = SKIPPED)
         SAME_URL_SAME_HASH   same document, content unchanged since last run
@@ -94,7 +88,7 @@ CREATE TABLE IF NOT EXISTS ai_platform_dev.regulatory_scraping.scraping_audit_lo
     audit_id                 STRING    NOT NULL,
     run_id                   STRING    NOT NULL,
     record_type              STRING    NOT NULL COMMENT 'RUN, CATEGORY, ITEM or FILE',
-    stage                    STRING    NOT NULL COMMENT 'SCRAPE or COPY',
+    stage                    STRING    NOT NULL COMMENT 'SCRAPE or SCAN',
     regulator_id             STRING    NOT NULL,
     event_time_sgt           TIMESTAMP NOT NULL,
     status                   STRING    NOT NULL,
@@ -138,7 +132,7 @@ CREATE TABLE IF NOT EXISTS ai_platform_dev.regulatory_scraping.scraping_audit_lo
     error_details            STRING
 )
 USING DELTA
-COMMENT 'Append only event trail for scraping and copy stages.'
+COMMENT 'Append only event trail for the scrape and scan verdict stages.'
 TBLPROPERTIES (
     'delta.autoOptimize.optimizeWrite' = 'true',
     'delta.autoOptimize.autoCompact'   = 'true',
@@ -161,10 +155,10 @@ WHERE  record_type = 'CATEGORY'
 ORDER  BY category_id;
 */
 
-/* What the copy job will pick up next */
+/* Files still waiting for a scan verdict */
 /*
-SELECT document_id, category_id, file_name, current_version, copy_status, copy_retry_count
+SELECT document_id, regulator_id, file_name, current_version, last_changed_sgt
 FROM   ai_platform_dev.regulatory_scraping.pdf_catalog
-WHERE  copy_status IN ('PENDING', 'FAILED', 'BLOCKED')
+WHERE  malware_scan_verdict IS NULL
 ORDER  BY last_changed_sgt;
 */
